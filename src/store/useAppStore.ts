@@ -48,6 +48,39 @@ function getDateStr(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
+export function todayStr(): string {
+  return getDateStr(new Date())
+}
+
+export function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  return getDateStr(d)
+}
+
+export function formatDateLabel(dateStr: string): string {
+  const d = new Date(dateStr)
+  const weekMap = ['日', '一', '二', '三', '四', '五', '六']
+  return `${d.getMonth() + 1}月${d.getDate()}日 周${weekMap[d.getDay()]}`
+}
+
+export function getWeekDays(baseDate: string) {
+  const base = new Date(baseDate)
+  const dayOfWeek = base.getDay()
+  const monday = new Date(base)
+  monday.setDate(base.getDate() - ((dayOfWeek + 6) % 7))
+  const days: { date: string; day: number; weekLabel: string; isToday: boolean }[] = []
+  const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
+  const today = todayStr()
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    const dateStr = getDateStr(d)
+    days.push({ date: dateStr, day: d.getDate(), weekLabel: weekLabels[i], isToday: dateStr === today })
+  }
+  return days
+}
+
 function getShortDateStr(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
@@ -75,6 +108,59 @@ function normalizePercent(list: { name: string; value: number }[]): Distribution
     idx = (idx + 1) % normalized.length
   }
   return normalized
+}
+
+export function mapMockAppointments(appointments: Appointment[]): Appointment[] {
+  const today = todayStr()
+  const mapping: Record<string, string> = {
+    '2026-06-21': addDays(today, -1),
+    '2026-06-22': today,
+    '2026-06-23': addDays(today, 1),
+    '2026-06-24': addDays(today, 2),
+    '2026-06-20': addDays(today, -2),
+    '2026-06-25': addDays(today, 3),
+    '2026-06-26': addDays(today, 4),
+  }
+  return appointments.map((a) => ({ ...a, date: mapping[a.date] || a.date }))
+}
+
+export function mapMockTodos(todos: TodoItem[]): TodoItem[] {
+  const today = todayStr()
+  const mapping: Record<string, string> = {
+    '2026-06-21': addDays(today, -1),
+    '2026-06-22': today,
+    '2026-06-23': addDays(today, 1),
+    '2026-06-24': addDays(today, 2),
+    '2026-06-20': addDays(today, -2),
+  }
+  return todos.map((t) => {
+    const datePart = t.dueTime.split('T')[0]
+    const mappedDate = mapping[datePart]
+    if (!mappedDate) return t
+    const timePart = t.dueTime.split('T')[1] || '09:00:00.000Z'
+    return { ...t, dueTime: `${mappedDate}T${timePart}` }
+  })
+}
+
+export function getDaySummary(dateStr: string, state: PersistableState) {
+  const mappedApts = mapMockAppointments(state.appointments)
+  const mappedTodos = mapMockTodos(state.todos)
+
+  const dayAppointments = mappedApts.filter((a) => a.date === dateStr)
+  const pendingFollowUp = mappedTodos.filter((t) => !t.completed && t.dueTime.startsWith(dateStr))
+  const arrivals = dayAppointments.filter((a) => a.status === 'confirmed' || a.status === 'arrived')
+  const pendingConfirm = dayAppointments.filter((a) => a.status === 'pending')
+
+  return {
+    appointmentCount: dayAppointments.length,
+    followUpCount: pendingFollowUp.length,
+    arrivalCount: arrivals.length,
+    pendingConfirmCount: pendingConfirm.length,
+    dayAppointments,
+    pendingFollowUp,
+    arrivals,
+    pendingConfirm,
+  }
 }
 
 export function getPerformance(state: PersistableState): Performance {
@@ -281,7 +367,7 @@ export const useAppStore = create<AppState>((set, get) => {
         }
         return {
           customers: state.customers.map((c) =>
-            c.id === customerId ? { ...c, nextFollowUp: time } : c
+            c.id === customerId ? { ...c, nextFollowUp: time, nextFollowUpPurpose: purpose || '' } : c
           ),
           todos: [...state.todos, newTodo],
         }

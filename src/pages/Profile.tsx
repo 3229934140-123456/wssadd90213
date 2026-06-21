@@ -1,6 +1,6 @@
 import { BarChart3, TrendingUp, Users, CalendarCheck, DollarSign, Award, Sparkles, ShoppingBag, Store } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { useAppStore } from '@/store/useAppStore'
+import { useAppStore, mapMockAppointments } from '@/store/useAppStore'
 import type { Appointment, Customer, Lead, TodoItem, Performance } from '@/types'
 
 const COLORS = ['#6C5CE7', '#00B894', '#FDCB6E', '#FF6B6B', '#74B9FF']
@@ -17,11 +17,9 @@ function computePerformance(
   leads: Lead[],
   todos: TodoItem[]
 ): Performance {
+  const mappedApts = mapMockAppointments(appointments)
+
   const today = new Date()
-  const y = today.getFullYear()
-  const m = String(today.getMonth() + 1).padStart(2, '0')
-  const d = String(today.getDate()).padStart(2, '0')
-  const todayStr = `${y}-${m}-${d}`
   const daysAgo = (n: number) => {
     const x = new Date(today)
     x.setDate(x.getDate() - n)
@@ -30,40 +28,27 @@ function computePerformance(
     const dd = String(x.getDate()).padStart(2, '0')
     return `${yy}-${mm}-${dd}`
   }
-  const weekDates = Array.from({length: 7}, (_, i) => daysAgo(6 - i))
+  const weekDates = Array.from({ length: 7 }, (_, i) => daysAgo(6 - i))
 
-  const addDays = (dateStr: string, n: number) => {
-    const x = new Date(dateStr)
-    x.setDate(x.getDate() + n)
-    const yy = x.getFullYear()
-    const mm = String(x.getMonth() + 1).padStart(2, '0')
-    const dd = String(x.getDate()).padStart(2, '0')
-    return `${yy}-${mm}-${dd}`
-  }
-  const dateMapping: Record<string, string> = {
-    '2026-06-21': addDays(todayStr, -1),
-    '2026-06-22': todayStr,
-    '2026-06-23': addDays(todayStr, 1),
-    '2026-06-24': addDays(todayStr, 2),
-  }
-  const mappedApts = appointments.map(a => ({ ...a, date: dateMapping[a.date] || a.date }))
+  const acceptedLeads = leads.filter(l => l.status === 'accepted').length
+  const completedTodos = todos.filter(t => t.completed).length
+  const weekReceptions = customers.length * 2 + acceptedLeads + completedTodos
+
+  const weekApts = mappedApts.filter(a => weekDates.includes(a.date))
+  const weekAppointments = weekApts.length
 
   const dealApts = mappedApts.filter(a => a.result?.type === 'deal')
-  const weekReceptions = Math.max(
-    leads.filter(l => l.status === 'accepted').length * 2 + todos.filter(t => t.completed).length,
-    18
-  )
-  const weekAppointments = mappedApts.filter(a => weekDates.includes(a.date)).length
   const weekDeals = dealApts.filter(a => weekDates.includes(a.date)).length
-  const weekRevenue = dealApts.reduce((sum, a) => sum + (a.result?.amount || 0), 0) + 50000
+  const weekRevenue = dealApts.reduce((sum, a) => sum + (a.result?.amount || 0), 0)
 
+  const dailyReceptions = Math.round(weekReceptions / 7)
   const dailyTrend = weekDates.map(dateStr => {
     const d = new Date(dateStr)
-    const label = `${d.getMonth()+1}/${d.getDate()}`
+    const label = `${d.getMonth() + 1}/${d.getDate()}`
     const dayApts = mappedApts.filter(a => a.date === dateStr)
     return {
       date: label,
-      receptions: Math.max(1, Math.round(weekReceptions / 7 + Math.random() * 2 - 1)),
+      receptions: dailyReceptions,
       appointments: dayApts.length,
       deals: dayApts.filter(a => a.result?.type === 'deal').length,
     }
@@ -71,53 +56,51 @@ function computePerformance(
 
   const projectCount: Record<string, number> = {}
   dealApts.forEach(a => {
-    const p = a.result?.project || a.project || '其他'
-    const key = ['鼻综合','双眼皮','隆胸','吸脂','注射','热玛吉'].find(k => p.includes(k)) || '其他'
-    const normKey = key === '注射' ? '注射类' : key
-    projectCount[normKey] = (projectCount[normKey] || 0) + 1
+    const p = a.result?.project || a.project || ''
+    let key = '其他'
+    if (p.includes('鼻')) key = '鼻综合'
+    else if (p.includes('眼') || p.includes('双眼皮')) key = '双眼皮'
+    else if (p.includes('胸') || p.includes('隆胸')) key = '隆胸'
+    else if (p.includes('脂')) key = '吸脂'
+    else if (p.includes('玻') || p.includes('注射') || p.includes('瘦脸') || p.includes('皱')) key = '注射类'
+    else if (p.includes('热玛吉')) key = '热玛吉'
+    projectCount[key] = (projectCount[key] || 0) + 1
   })
-  const fallback: Record<string, number> = { '鼻综合': 3, '双眼皮': 2, '隆胸': 1, '吸脂': 1, '注射类': 1 }
-  Object.entries(fallback).forEach(([k, v]) => { if (!projectCount[k]) projectCount[k] = v })
-  const projTotal = Object.values(projectCount).reduce((s,n) => s+n, 0)
-  const projectDistribution = Object.entries(projectCount)
-    .map(([name, value]) => ({ name, value: Math.round((value / projTotal) * 100) }))
-    .slice(0, 5)
+  const projTotal = Object.values(projectCount).reduce((s, n) => s + n, 0)
+  const projectDistribution = projTotal > 0
+    ? Object.entries(projectCount).map(([name, value]) => ({ name, value: Math.round((value / projTotal) * 100) }))
+    : []
 
   const srcCount: Record<string, number> = {}
-  customers.forEach(c => { srcCount[c.source === 'xinYang' ? '新氧' : '美团'] = (srcCount[c.source === 'xinYang' ? '新氧' : '美团'] || 0) + 1 })
-  srcCount['自然到店'] = Math.max(1, Math.round(Object.values(srcCount).reduce((s,n)=>s+n,0) * 0.1))
-  const srcTotal = Object.values(srcCount).reduce((s,n)=>s+n,0)
-  const sourceDistribution = Object.entries(srcCount)
-    .map(([name, value]) => ({ name, value: Math.round((value / srcTotal) * 100) }))
+  customers.forEach(c => {
+    const name = c.source === 'xinYang' ? '新氧' : '美团'
+    srcCount[name] = (srcCount[name] || 0) + 1
+  })
+  const srcTotal = Object.values(srcCount).reduce((s, n) => s + n, 0)
+  if (srcTotal > 0) {
+    const naturalCount = Math.max(1, Math.round(srcTotal * 0.1))
+    srcCount['自然到店'] = naturalCount
+  }
+  const totalWithNatural = Object.values(srcCount).reduce((s, n) => s + n, 0)
+  const sourceDistribution = totalWithNatural > 0
+    ? Object.entries(srcCount).map(([name, value]) => ({ name, value: Math.round((value / totalWithNatural) * 100) }))
+    : []
 
   return { weekReceptions, weekAppointments, weekDeals, weekRevenue, dailyTrend, projectDistribution, sourceDistribution }
 }
 
 function computeLostReasons(appointments: Appointment[]): { name: string; count: number }[] {
+  const mappedApts = mapMockAppointments(appointments)
   const reasonCount: Record<string, number> = {}
-  const lostApts = appointments.filter(a => a.result?.type === 'lost' && a.result?.reason)
+  const lostApts = mappedApts.filter(a => a.result?.type === 'lost')
   lostApts.forEach(a => {
-    const reason = a.result!.reason!
-    reasonCount[reason] = (reasonCount[reason] || 0) + 1
+    const reason = a.result?.reason || ''
+    const key = reason.trim() === '' ? '未选择原因' : reason
+    reasonCount[key] = (reasonCount[key] || 0) + 1
   })
-  const fallbackReasons = [
-    { name: '价格太高', count: 3 },
-    { name: '对比其他机构', count: 2 },
-    { name: '担心效果', count: 2 },
-    { name: '家人反对', count: 1 },
-    { name: '暂时不考虑', count: 1 },
-  ]
-  if (Object.keys(reasonCount).length === 0) {
-    return fallbackReasons
-  }
-  const fromData = Object.entries(reasonCount).map(([name, count]) => ({ name, count }))
-  const existingNames = new Set(fromData.map(r => r.name))
-  fallbackReasons.forEach(r => {
-    if (!existingNames.has(r.name)) {
-      fromData.push(r)
-    }
-  })
-  return fromData.sort((a, b) => b.count - a.count)
+  return Object.entries(reasonCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
 }
 
 export default function Profile() {
@@ -220,38 +203,44 @@ export default function Profile() {
             <Award size={16} className="text-primary-500" />
             <h3 className="text-sm font-medium text-gray-700">成交项目分布</h3>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="w-32 h-32 flex-shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={performance.projectDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={32}
-                    outerRadius={52}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {performance.projectDistribution.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+          {performance.projectDistribution.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+              暂无成交项目
             </div>
-            <div className="flex-1 space-y-2">
-              {performance.projectDistribution.map((item, i) => (
-                <div key={item.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    <span className="text-sm text-gray-600">{item.name}</span>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="w-32 h-32 flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={performance.projectDistribution}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={32}
+                      outerRadius={52}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {performance.projectDistribution.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex-1 space-y-2">
+                {performance.projectDistribution.map((item, i) => (
+                  <div key={item.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="text-sm text-gray-600">{item.name}</span>
+                    </div>
+                    <span className="text-sm font-display font-medium text-gray-800">{item.value}%</span>
                   </div>
-                  <span className="text-sm font-display font-medium text-gray-800">{item.value}%</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -259,36 +248,42 @@ export default function Profile() {
             <Users size={16} className="text-primary-500" />
             <h3 className="text-sm font-medium text-gray-700">渠道来源占比</h3>
           </div>
-          <div className="space-y-3">
-            {performance.sourceDistribution.map((item, i) => {
-              const Icon = sourceIcons[item.name] || Sparkles
-              const colors = [
-                { bg: 'bg-primary-500', light: 'bg-primary-100' },
-                { bg: 'bg-warning-500', light: 'bg-warning-100' },
-                { bg: 'bg-success-500', light: 'bg-success-100' },
-              ]
-              const c = colors[i % colors.length]
-              return (
-                <div key={item.name}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg ${c.light} flex items-center justify-center`}>
-                        <Icon size={14} className={c.bg.replace('bg-', 'text-')} />
+          {performance.sourceDistribution.length === 0 ? (
+            <div className="flex items-center justify-center h-24 text-gray-400 text-sm">
+              暂无渠道数据
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {performance.sourceDistribution.map((item, i) => {
+                const Icon = sourceIcons[item.name] || Sparkles
+                const colors = [
+                  { bg: 'bg-primary-500', light: 'bg-primary-100' },
+                  { bg: 'bg-warning-500', light: 'bg-warning-100' },
+                  { bg: 'bg-success-500', light: 'bg-success-100' },
+                ]
+                const c = colors[i % colors.length]
+                return (
+                  <div key={item.name}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-7 h-7 rounded-lg ${c.light} flex items-center justify-center`}>
+                          <Icon size={14} className={c.bg.replace('bg-', 'text-')} />
+                        </div>
+                        <span className="text-sm text-gray-700">{item.name}</span>
                       </div>
-                      <span className="text-sm text-gray-700">{item.name}</span>
+                      <span className="font-display font-medium text-gray-800">{item.value}%</span>
                     </div>
-                    <span className="font-display font-medium text-gray-800">{item.value}%</span>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${c.bg} rounded-full transition-all duration-500`}
+                        style={{ width: `${item.value}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${c.bg} rounded-full transition-all duration-500`}
-                      style={{ width: `${item.value}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -317,33 +312,39 @@ export default function Profile() {
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-sm font-medium text-gray-700 mb-3">流失原因统计</h3>
-          <div className="space-y-2">
-            {lostReasons.map((reason, i) => {
-              const percent = Math.round((reason.count / maxReasonCount) * 100)
-              const barColors = [
-                { bg: 'bg-red-500', light: 'bg-red-100' },
-                { bg: 'bg-orange-500', light: 'bg-orange-100' },
-                { bg: 'bg-amber-500', light: 'bg-amber-100' },
-                { bg: 'bg-yellow-500', light: 'bg-yellow-100' },
-                { bg: 'bg-gray-400', light: 'bg-gray-100' },
-              ]
-              const c = barColors[i % barColors.length]
-              return (
-                <div key={reason.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-700">{reason.name}</span>
-                    <span className="text-xs text-gray-500">{reason.count}次</span>
+          {lostReasons.length === 0 ? (
+            <div className="flex items-center justify-center h-24 text-gray-400 text-sm">
+              暂无流失数据
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {lostReasons.map((reason, i) => {
+                const percent = Math.round((reason.count / maxReasonCount) * 100)
+                const barColors = [
+                  { bg: 'bg-red-500', light: 'bg-red-100' },
+                  { bg: 'bg-orange-500', light: 'bg-orange-100' },
+                  { bg: 'bg-amber-500', light: 'bg-amber-100' },
+                  { bg: 'bg-yellow-500', light: 'bg-yellow-100' },
+                  { bg: 'bg-gray-400', light: 'bg-gray-100' },
+                ]
+                const c = barColors[i % barColors.length]
+                return (
+                  <div key={reason.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-700">{reason.name}</span>
+                      <span className="text-xs text-gray-500">{reason.count}次</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${c.bg} rounded-full transition-all duration-500`}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${c.bg} rounded-full transition-all duration-500`}
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

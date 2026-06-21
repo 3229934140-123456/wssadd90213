@@ -1,28 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Phone, MessageCircle, Clock, AlertTriangle, CheckCircle2, ChevronRight, Bell, CalendarCheck, Users, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react'
-import { useAppStore } from '@/store/useAppStore'
-
-function todayStr() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-function addDays(dateStr: string, days: number) {
-  const d = new Date(dateStr)
-  d.setDate(d.getDate() + days)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-function formatDateLabel(dateStr: string) {
-  const d = new Date(dateStr)
-  const weekMap = ['日', '一', '二', '三', '四', '五', '六']
-  return `${d.getMonth() + 1}月${d.getDate()}日 周${weekMap[d.getDay()]}`
-}
+import { useAppStore, todayStr, addDays, formatDateLabel, mapMockTodos, mapMockAppointments } from '@/store/useAppStore'
 
 export default function TodayTodo() {
   const navigate = useNavigate()
@@ -34,21 +13,13 @@ export default function TodayTodo() {
   const [selectedDate, setSelectedDate] = useState(todayStr())
 
   const today = todayStr()
-  const dateMapping: Record<string, string> = {
-    '2026-06-21': addDays(today, -1),
-    '2026-06-22': today,
-    '2026-06-23': addDays(today, 1),
-    '2026-06-24': addDays(today, 2),
-  }
-  const mappedAppointments = appointments.map((a) => ({
-    ...a,
-    date: dateMapping[a.date] || a.date,
-  }))
+  const mappedTodos = mapMockTodos(todos)
+  const mappedAppointments = mapMockAppointments(appointments)
 
   const pendingLeads = leads.filter((l) => l.status === 'pending')
   const selectedAppointments = mappedAppointments.filter((a) => a.date === selectedDate)
   const selectedArrivals = selectedAppointments.filter((a) => a.status === 'confirmed' || a.status === 'arrived')
-  const selectedPendingTodos = todos.filter(t => !t.completed && t.dueTime.startsWith(selectedDate))
+  const selectedPendingTodos = mappedTodos.filter(t => !t.completed && t.dueTime.startsWith(selectedDate))
   const isToday = selectedDate === today
   const overdueTodos = isToday
     ? selectedPendingTodos.filter((t) => new Date(t.dueTime) < new Date())
@@ -192,7 +163,14 @@ export default function TodayTodo() {
                           已超时
                         </span>
                       </div>
-                      <div className="text-sm text-gray-500 mt-1">{todo.content}</div>
+                      {todo.purpose ? (
+                        <>
+                          <p className="font-medium text-gray-900 mt-1">{todo.purpose}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{todo.content}</p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-500 mt-1">{todo.content}</p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -268,7 +246,14 @@ export default function TodayTodo() {
                           <div className="w-3 h-3 rounded-full bg-transparent" />
                         </button>
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">{todo.content}</p>
+                      {todo.purpose ? (
+                        <>
+                          <p className="font-medium text-gray-900 mt-1">{todo.purpose}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{todo.content}</p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-500 mt-1">{todo.content}</p>
+                      )}
                       <div className="flex items-center gap-1 mt-1.5">
                         <Clock size={12} className="text-gray-300" />
                         <span className="text-xs text-gray-400">

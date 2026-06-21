@@ -15,53 +15,8 @@ import {
   BellRing,
   ClipboardList,
 } from 'lucide-react'
-import { useAppStore } from '@/store/useAppStore'
+import { useAppStore, todayStr, addDays, formatDateLabel, getWeekDays, mapMockAppointments, mapMockTodos } from '@/store/useAppStore'
 import type { Appointment, AppointmentStatus } from '@/types'
-
-function todayStr() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-function addDays(dateStr: string, days: number) {
-  const d = new Date(dateStr)
-  d.setDate(d.getDate() + days)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-function formatDateLabel(dateStr: string) {
-  const d = new Date(dateStr)
-  const weekMap = ['日', '一', '二', '三', '四', '五', '六']
-  return `${d.getMonth() + 1}月${d.getDate()}日 周${weekMap[d.getDay()]}`
-}
-function getWeekDays(baseDate: string) {
-  const base = new Date(baseDate)
-  const dayOfWeek = base.getDay()
-  const monday = new Date(base)
-  monday.setDate(base.getDate() - ((dayOfWeek + 6) % 7))
-  const days = []
-  const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
-  const todayStrValue = todayStr()
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const dateStr = `${y}-${m}-${day}`
-    days.push({
-      date: dateStr,
-      day: d.getDate(),
-      weekLabel: weekLabels[i],
-      isToday: dateStr === todayStrValue,
-    })
-  }
-  return days
-}
 
 const statusConfig: Record<AppointmentStatus, { label: string; bg: string; text: string }> = {
   pending: { label: '待确认', bg: 'bg-warning-50', text: 'text-warning-600' },
@@ -100,21 +55,13 @@ export default function Appointments() {
   const weekDays = getWeekDays(weekBase)
 
   const today = todayStr()
-  const dateMapping: Record<string, string> = {
-    '2026-06-21': addDays(today, -1),
-    '2026-06-22': today,
-    '2026-06-23': addDays(today, 1),
-    '2026-06-24': addDays(today, 2),
-  }
-  const mappedAppointments = appointments.map((a) => ({
-    ...a,
-    date: dateMapping[a.date] || a.date,
-  }))
+  const mappedAppointments = mapMockAppointments(appointments)
+  const mappedTodos = mapMockTodos(todos)
 
   const dayAppointments = mappedAppointments.filter((a) => a.date === selectedDate)
   const datesWithAppointments = new Set(mappedAppointments.map((a) => a.date))
 
-  const pendingFollowUpCount = todos.filter(
+  const pendingFollowUpCount = mappedTodos.filter(
     (t) => t.dueTime.startsWith(selectedDate) && !t.completed
   ).length
   const upcomingArrivalCount = mappedAppointments.filter(
@@ -123,6 +70,24 @@ export default function Appointments() {
   const pendingConfirmCount = mappedAppointments.filter(
     (a) => a.date === selectedDate && a.status === 'pending'
   ).length
+
+  const weekStats = weekDays.map((day) => {
+    const dayPendingTodos = mappedTodos.filter(
+      (t) => t.dueTime.startsWith(day.date) && !t.completed
+    ).length
+    const dayArrivals = mappedAppointments.filter(
+      (a) => a.date === day.date && (a.status === 'confirmed' || a.status === 'arrived')
+    ).length
+    const dayPending = mappedAppointments.filter(
+      (a) => a.date === day.date && a.status === 'pending'
+    ).length
+    return {
+      ...day,
+      pendingTodos: dayPendingTodos,
+      arrivals: dayArrivals,
+      pendingConfirm: dayPending,
+    }
+  })
 
   const handlePrevDay = () => setSelectedDate(addDays(selectedDate, -1))
   const handleNextDay = () => setSelectedDate(addDays(selectedDate, 1))
@@ -245,6 +210,48 @@ export default function Appointments() {
               {pendingConfirmCount}
               <span className="text-xs font-normal text-gray-400 ml-1">个</span>
             </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-gray-800">本周日程总览</h2>
+            <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+              周一至周日
+            </span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {weekStats.map((day) => (
+              <button
+                key={day.date}
+                onClick={() => setSelectedDate(day.date)}
+                className={`flex-shrink-0 flex flex-col items-center py-3 px-3 rounded-2xl shadow-sm transition-all relative min-w-[72px] flex-1 ${
+                  day.date === selectedDate
+                    ? 'bg-primary-50 border-2 border-primary-500 shadow-primary-500/20'
+                    : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                }`}
+              >
+                {day.isToday && (
+                  <div className="absolute top-1.5 left-1.5">
+                    <span className="text-[9px] bg-primary-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+                      今
+                    </span>
+                  </div>
+                )}
+                <span
+                  className={`text-xs font-medium mb-1 ${
+                    day.isToday ? 'text-primary-600 font-bold' : 'text-gray-500'
+                  }`}
+                >
+                  周{day.weekLabel}
+                </span>
+                <div className="font-display font-bold text-2xl text-gray-800 mb-1">
+                  {day.pendingTodos}
+                </div>
+                <div className="text-[10px] text-gray-400">到院 {day.arrivals} 人</div>
+                <div className="text-[10px] text-gray-400">待确认 {day.pendingConfirm} 个</div>
+              </button>
+            ))}
           </div>
         </div>
 
