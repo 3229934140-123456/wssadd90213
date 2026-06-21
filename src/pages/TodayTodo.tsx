@@ -2,6 +2,19 @@ import { useNavigate } from 'react-router-dom'
 import { Phone, MessageCircle, Clock, AlertTriangle, CheckCircle2, ChevronRight, Bell, CalendarCheck, Users } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 
+function todayStr() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+function formatTodayLabel() {
+  const d = new Date()
+  const weekMap = ['日', '一', '二', '三', '四', '五', '六']
+  return `${d.getMonth() + 1}月${d.getDate()}日 周${weekMap[d.getDay()]}`
+}
+
 export default function TodayTodo() {
   const navigate = useNavigate()
   const leads = useAppStore((s) => s.leads)
@@ -10,9 +23,9 @@ export default function TodayTodo() {
   const toggleTodo = useAppStore((s) => s.toggleTodo)
 
   const pendingLeads = leads.filter((l) => l.status === 'pending')
-  const todayAppointments = appointments.filter((a) => a.date === '2026-06-22')
+  const todayAppointments = appointments.filter((a) => a.date === todayStr())
   const todayArrivals = todayAppointments.filter((a) => a.status === 'confirmed' || a.status === 'arrived')
-  const pendingTodos = todos.filter((t) => !t.completed)
+  const pendingTodos = todos.filter(t => !t.completed && t.dueTime.startsWith(todayStr()))
   const overdueTodos = pendingTodos.filter((t) => new Date(t.dueTime) < new Date())
 
   const priorityConfig = {
@@ -33,7 +46,7 @@ export default function TodayTodo() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-white text-xl font-bold">今日待办</h1>
-            <p className="text-primary-100 text-sm mt-0.5">6月22日 周一</p>
+            <p className="text-primary-100 text-sm mt-0.5">{formatTodayLabel()}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
             <Bell size={20} className="text-white" />
@@ -114,13 +127,19 @@ export default function TodayTodo() {
                   <div className="flex gap-2">
                     <button
                       className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center"
-                      onClick={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate(`/customer/${todo.customerId}?action=call`)
+                      }}
                     >
                       <Phone size={14} className="text-primary-500" />
                     </button>
                     <button
                       className="w-8 h-8 rounded-full bg-success-50 flex items-center justify-center"
-                      onClick={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate(`/customer/${todo.customerId}?action=chat`)
+                      }}
                     >
                       <MessageCircle size={14} className="text-success-500" />
                     </button>

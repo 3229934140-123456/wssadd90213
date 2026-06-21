@@ -20,7 +20,7 @@ function SwipeableLeadCard({ lead, onAccept, onTransfer }: { lead: Lead; onAccep
     if (!isDragging.current) return
     const diff = e.touches[0].clientX - startX.current
     currentX.current = diff
-    setOffsetX(Math.max(-120, Math.min(120, diff)))
+    setOffsetX(Math.max(-100, Math.min(100, diff)))
   }, [])
 
   const handleTouchEnd = useCallback(() => {
@@ -45,16 +45,16 @@ function SwipeableLeadCard({ lead, onAccept, onTransfer }: { lead: Lead; onAccep
 
   return (
     <div className="relative overflow-hidden rounded-2xl mb-3">
-      <div className="absolute inset-y-0 left-0 w-[120px] bg-success-500 flex items-center justify-center z-0">
-        <div className="text-center text-white">
-          <UserPlus size={24} className="mx-auto mb-1" />
-          <span className="text-sm font-medium">接单</span>
-        </div>
-      </div>
-      <div className="absolute inset-y-0 right-0 w-[120px] bg-blue-500 flex items-center justify-center z-0">
+      <div className="absolute inset-y-0 left-0 w-[100px] bg-blue-500 flex items-center justify-center z-0">
         <div className="text-center text-white">
           <Share2 size={24} className="mx-auto mb-1" />
           <span className="text-sm font-medium">转交</span>
+        </div>
+      </div>
+      <div className="absolute inset-y-0 right-0 w-[100px] bg-success-500 flex items-center justify-center z-0">
+        <div className="text-center text-white">
+          <UserPlus size={24} className="mx-auto mb-1" />
+          <span className="text-sm font-medium">接单</span>
         </div>
       </div>
       <div
@@ -112,7 +112,7 @@ function SwipeableLeadCard({ lead, onAccept, onTransfer }: { lead: Lead; onAccep
 
         {!isAccepted && !isTransferred && (
           <div className="mt-3 text-xs text-gray-300 text-center">
-            ← 左滑接单 · 右滑转交 →
+            ← 右滑转交 · 左滑接单 →
           </div>
         )}
       </div>

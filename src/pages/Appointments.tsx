@@ -4,6 +4,22 @@ import { CalendarCheck, Clock, Send, CheckCircle, XCircle, ChevronDown, X, Alert
 import { useAppStore } from '@/store/useAppStore'
 import type { Appointment, AppointmentStatus } from '@/types'
 
+function todayStr() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+function addDays(dateStr: string, days: number) {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 const statusConfig: Record<AppointmentStatus, { label: string; bg: string; text: string }> = {
   pending: { label: '待确认', bg: 'bg-warning-50', text: 'text-warning-600' },
   confirmed: { label: '已确认', bg: 'bg-blue-50', text: 'text-blue-600' },
@@ -13,21 +29,26 @@ const statusConfig: Record<AppointmentStatus, { label: string; bg: string; text:
 }
 
 function getWeekDays() {
-  const today = new Date('2026-06-22')
+  const today = new Date()
   const dayOfWeek = today.getDay()
   const monday = new Date(today)
   monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7))
 
   const days = []
   const weekLabels = ['一', '二', '三', '四', '五', '六', '日']
+  const todayStrValue = todayStr()
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${m}-${day}`
     days.push({
-      date: d.toISOString().split('T')[0],
+      date: dateStr,
       day: d.getDate(),
       weekLabel: weekLabels[i],
-      isToday: d.toISOString().split('T')[0] === '2026-06-22',
+      isToday: dateStr === todayStrValue,
     })
   }
   return days
@@ -49,7 +70,7 @@ export default function Appointments() {
   const setAppointmentResult = useAppStore((s) => s.setAppointmentResult)
   const sendReminder = useAppStore((s) => s.sendReminder)
 
-  const [selectedDate, setSelectedDate] = useState('2026-06-22')
+  const [selectedDate, setSelectedDate] = useState(todayStr())
   const [showResultSheet, setShowResultSheet] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [resultType, setResultType] = useState<'deal' | 'lost'>('deal')
@@ -58,9 +79,22 @@ export default function Appointments() {
   const [lostReason, setLostReason] = useState('')
 
   const weekDays = getWeekDays()
-  const dayAppointments = appointments.filter((a) => a.date === selectedDate)
 
-  const datesWithAppointments = new Set(appointments.map((a) => a.date))
+  const today = todayStr()
+  const dateMapping: Record<string, string> = {
+    '2026-06-21': addDays(today, -1),
+    '2026-06-22': today,
+    '2026-06-23': addDays(today, 1),
+    '2026-06-24': addDays(today, 2),
+  }
+  const mappedAppointments = appointments.map((a) => ({
+    ...a,
+    date: dateMapping[a.date] || a.date,
+  }))
+
+  const dayAppointments = mappedAppointments.filter((a) => a.date === selectedDate)
+
+  const datesWithAppointments = new Set(mappedAppointments.map((a) => a.date))
 
   const handleSendReminder = (appointmentId: string) => {
     sendReminder(appointmentId)
