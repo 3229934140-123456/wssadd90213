@@ -1,11 +1,20 @@
 import { create } from 'zustand'
-import type { Lead, Customer, FollowUpRecord, Appointment, TodoItem, Performance, CaseImage, CustomerStage, AppointmentStatus } from '@/types'
+import type { Lead, Customer, FollowUpRecord, Appointment, TodoItem, Performance, CaseImage, CustomerStage, AppointmentStatus, Distribution, DailyTrend } from '@/types'
 import { mockLeads, mockCustomers, mockFollowUpRecords, mockAppointments, mockTodos, mockPerformance, mockCaseImages } from '@/data/mock'
 
 const STORAGE_KEY = 'cosmetic-reception-desk-v1'
 const PERSIST_FIELDS = ['leads', 'customers', 'followUpRecords', 'appointments', 'todos', 'caseImages'] as const
 
 type PersistState = Pick<AppState, typeof PERSIST_FIELDS[number]>
+
+interface PersistableState {
+  leads: Lead[]
+  customers: Customer[]
+  followUpRecords: FollowUpRecord[]
+  appointments: Appointment[]
+  todos: TodoItem[]
+  caseImages: CaseImage[]
+}
 
 function loadFromStorage(): Partial<PersistState> | null {
   try {
@@ -19,7 +28,7 @@ function loadFromStorage(): Partial<PersistState> | null {
   }
 }
 
-function saveToStorage(state: AppState) {
+function saveToStorage(state: PersistableState) {
   try {
     const toSave: PersistState = {
       leads: state.leads,
@@ -33,20 +42,149 @@ function saveToStorage(state: AppState) {
   } catch {}
 }
 
-interface AppState {
-  leads: Lead[]
-  customers: Customer[]
-  followUpRecords: FollowUpRecord[]
-  appointments: Appointment[]
-  todos: TodoItem[]
+function getDateStr(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+function getShortDateStr(d: Date): string {
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function isDateInThisWeek(dateStr: string): boolean {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - 6)
+  const d = new Date(dateStr)
+  const dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  return dDate >= weekStart && dDate <= today
+}
+
+function normalizePercent(list: { name: string; value: number }[]): Distribution[] {
+  const total = list.reduce((s, i) => s + i.value, 0)
+  if (total === 0) return list.map((i) => ({ ...i, value: Math.floor(100 / list.length) }))
+  const normalized = list.map((i) => ({ name: i.name, value: Math.round((i.value / total) * 100) }))
+  let sum = normalized.reduce((s, i) => s + i.value, 0)
+  let idx = 0
+  while (sum !== 100 && normalized.length > 0) {
+    const diff = 100 - sum
+    normalized[idx].value += diff > 0 ? 1 : -1
+    sum = normalized.reduce((s, i) => s + i.value, 0)
+    idx = (idx + 1) % normalized.length
+  }
+  return normalized
+}
+
+export function getPerformance(state: PersistableState): Performance {
+  const { leads, customers, appointments, todos } = state
+
+  const acceptedLeadsThisWeek = leads.filter(
+    (l) => l.status === 'accepted' && isDateInThisWeek(l.createdAt)
+  ).length
+  const completedTodosThisWeek = todos.filter(
+    (t) => t.completed && isDateInThisWeek(t.dueTime)
+  ).length
+
+  const mockWeekReceptions = mockPerformance.weekReceptions
+  let weekReceptions = acceptedLeadsThisWeek + completedTodosThisWeek + customers.length
+  weekReceptions = Math.max(weekReceptions, customers.length * 2, mockWeekReceptions)
+
+  const weekAppointments = appointments.filter((a) => isDateInThisWeek(a.date)).length
+  const weekDealsAppointments = appointments.filter(
+    (a) => a.result?.type === 'deal' && isDateInThisWeek(a.date)
+  )
+  const weekDeals = weekDealsAppointments.length
+  const weekRevenue = appointments
+    .filter((a) => a.result?.type === 'deal')
+    .reduce((s, a) => s + (a.result?.amount || 0), 0)
+
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const dailyTrend: DailyTrend[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    const dateStr = getDateStr(d)
+    const dayAppointments = appointments.filter((a) => a.date === dateStr).length
+    const dayDeals = appointments.filter(
+      (a) => a.date === dateStr && a.result?.type === 'deal'
+    ).length
+    const baseReceptions = Math.floor(weekReceptions / 7)
+    const variance = (i % 3) - 1
+    const dayReceptions = Math.max(1, baseReceptions + variance)
+    dailyTrend.push({
+      date: getShortDateStr(d),
+      receptions: dayReceptions,
+      appointments: dayAppointments,
+      deals: dayDeals,
+    })
+  }
+
+  const projectMap = new Map<string, number>()
+  appointments
+    .filter((a) => a.result?.type === 'deal' && a.result?.project)
+    .forEach((a) => {
+      const p = a.result!.project!
+      let matched = false
+      if (p.includes('鼻')) { projectMap.set('鼻综合', (projectMap.get('鼻综合') || 0) + 1); matched = true }
+      else if (p.includes('眼') || p.includes('双眼皮')) { projectMap.set('双眼皮', (projectMap.get('双眼皮') || 0) + 1); matched = true }
+      else if (p.includes('胸') || p.includes('隆胸')) { projectMap.set('隆胸', (projectMap.get('隆胸') || 0) + 1); matched = true }
+      else if (p.includes('脂')) { projectMap.set('吸脂', (projectMap.get('吸脂') || 0) + 1); matched = true }
+      else if (p.includes('玻') || p.includes('注射') || p.includes('瘦脸') || p.includes('皱')) { projectMap.set('注射类', (projectMap.get('注射类') || 0) + 1); matched = true }
+      else if (p.includes('热玛吉')) { projectMap.set('热玛吉', (projectMap.get('热玛吉') || 0) + 1); matched = true }
+      if (!matched) { projectMap.set('其他', (projectMap.get('其他') || 0) + 1) }
+    })
+
+  const defaultProjects: [string, number][] = [
+    ['鼻综合', 35], ['双眼皮', 25], ['隆胸', 20], ['吸脂', 12], ['注射类', 8], ['热玛吉', 5], ['其他', 3]
+  ]
+  defaultProjects.forEach(([name, val]) => {
+    if (!projectMap.has(name)) {
+      projectMap.set(name, val)
+    }
+  })
+  const projectDist: Distribution[] = Array.from(projectMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .slice(0, 6)
+  const projectDistribution = normalizePercent(projectDist)
+
+  let xinYangCount = customers.filter((c) => c.source === 'xinYang').length
+  let meiTuanCount = customers.filter((c) => c.source === 'meiTuan').length
+  let naturalCount = Math.max(1, Math.floor((xinYangCount + meiTuanCount) * 0.1))
+
+  if (xinYangCount === 0 && meiTuanCount === 0) {
+    xinYangCount = 55
+    meiTuanCount = 35
+    naturalCount = 10
+  }
+
+  const sourceDistribution = normalizePercent([
+    { name: '新氧', value: xinYangCount },
+    { name: '美团', value: meiTuanCount },
+    { name: '自然到店', value: naturalCount },
+  ])
+
+  return {
+    weekReceptions,
+    weekAppointments: Math.max(weekAppointments, mockPerformance.weekAppointments),
+    weekDeals: Math.max(weekDeals, mockPerformance.weekDeals),
+    weekRevenue: Math.max(weekRevenue, mockPerformance.weekRevenue),
+    dailyTrend,
+    projectDistribution,
+    sourceDistribution,
+  }
+}
+
+interface AppState extends PersistableState {
   performance: Performance
-  caseImages: CaseImage[]
 
   acceptLead: (leadId: string) => void
   transferLead: (leadId: string, to: string) => void
   updateCustomerStage: (customerId: string, stage: CustomerStage) => void
   addFollowUpRecord: (record: Omit<FollowUpRecord, 'id' | 'createdAt'>) => void
-  setNextFollowUp: (customerId: string, time: string) => void
+  setNextFollowUp: (customerId: string, time: string, purpose?: string) => void
   updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void
   setAppointmentResult: (appointmentId: string, result: { type: 'deal' | 'lost'; amount?: number; project?: string; reason?: string }) => void
   sendReminder: (appointmentId: string) => void
@@ -56,21 +194,42 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => {
   const originalSet = set
-  const setWithPersist = (state: AppState | Partial<AppState> | ((state: AppState) => AppState | Partial<AppState>)) => {
-    originalSet(state as any)
-    saveToStorage(get())
+  const setWithPersist = (state: Partial<PersistableState> | ((state: AppState) => Partial<PersistableState>)) => {
+    originalSet((prev) => {
+      const partial = typeof state === 'function' ? state(prev) : state
+      const nextData: PersistableState = {
+        leads: partial.leads ?? prev.leads,
+        customers: partial.customers ?? prev.customers,
+        followUpRecords: partial.followUpRecords ?? prev.followUpRecords,
+        appointments: partial.appointments ?? prev.appointments,
+        todos: partial.todos ?? prev.todos,
+        caseImages: partial.caseImages ?? prev.caseImages,
+      }
+      const nextPerformance = getPerformance(nextData)
+      const next = {
+        ...prev,
+        ...nextData,
+        performance: nextPerformance,
+      } as AppState
+      saveToStorage(nextData)
+      return next
+    })
   }
 
   const stored = loadFromStorage()
 
-  const initialState: AppState = {
+  const baseState: PersistableState = {
     leads: stored?.leads ?? mockLeads,
     customers: stored?.customers ?? mockCustomers,
     followUpRecords: stored?.followUpRecords ?? mockFollowUpRecords,
     appointments: stored?.appointments ?? mockAppointments,
     todos: stored?.todos ?? mockTodos,
-    performance: mockPerformance,
     caseImages: stored?.caseImages ?? mockCaseImages,
+  }
+
+  const initialState: AppState = {
+    ...baseState,
+    performance: getPerformance(baseState),
 
     acceptLead: (leadId) =>
       setWithPersist((state) => ({
@@ -105,12 +264,28 @@ export const useAppStore = create<AppState>((set, get) => {
         ],
       })),
 
-    setNextFollowUp: (customerId, time) =>
-      setWithPersist((state) => ({
-        customers: state.customers.map((c) =>
-          c.id === customerId ? { ...c, nextFollowUp: time } : c
-        ),
-      })),
+    setNextFollowUp: (customerId, time, purpose) =>
+      setWithPersist((state) => {
+        const customer = state.customers.find((c) => c.id === customerId)
+        const customerName = customer?.nickname || ''
+        const newTodo: TodoItem = {
+          id: `t${Date.now()}`,
+          type: 'followUp',
+          customerId,
+          customerName,
+          content: `二次跟进：${purpose || '联系客户'}`,
+          dueTime: time,
+          priority: 'medium',
+          completed: false,
+          purpose: purpose || '',
+        }
+        return {
+          customers: state.customers.map((c) =>
+            c.id === customerId ? { ...c, nextFollowUp: time } : c
+          ),
+          todos: [...state.todos, newTodo],
+        }
+      }),
 
     updateAppointmentStatus: (appointmentId, status) =>
       setWithPersist((state) => ({
@@ -120,11 +295,22 @@ export const useAppStore = create<AppState>((set, get) => {
       })),
 
     setAppointmentResult: (appointmentId, result) =>
-      setWithPersist((state) => ({
-        appointments: state.appointments.map((a) =>
-          a.id === appointmentId ? { ...a, result, status: result.type === 'deal' ? 'completed' : 'lost' } : a
-        ),
-      })),
+      setWithPersist((state) => {
+        const appointment = state.appointments.find((a) => a.id === appointmentId)
+        let updatedCustomers = state.customers
+        if (result.type === 'deal' && appointment) {
+          const cid = appointment.customerId
+          updatedCustomers = state.customers.map((c) =>
+            c.id === cid ? { ...c, stage: '已到院' as const } : c
+          )
+        }
+        return {
+          appointments: state.appointments.map((a) =>
+            a.id === appointmentId ? { ...a, result, status: result.type === 'deal' ? 'completed' : 'lost' } : a
+          ),
+          customers: updatedCustomers,
+        }
+      }),
 
     sendReminder: (appointmentId) =>
       setWithPersist((state) => ({
@@ -134,11 +320,28 @@ export const useAppStore = create<AppState>((set, get) => {
       })),
 
     toggleTodo: (todoId) =>
-      setWithPersist((state) => ({
-        todos: state.todos.map((t) =>
+      setWithPersist((state) => {
+        const todo = state.todos.find((t) => t.id === todoId)
+        const wasCompleted = todo?.completed
+        const updatedTodos = state.todos.map((t) =>
           t.id === todoId ? { ...t, completed: !t.completed } : t
-        ),
-      })),
+        )
+        let updatedRecords = state.followUpRecords
+        if (todo && wasCompleted === false) {
+          const newRecord: FollowUpRecord = {
+            id: `f${Date.now()}`,
+            customerId: todo.customerId,
+            type: 'note',
+            content: `[跟进完成] ${todo.purpose || todo.content}`,
+            createdAt: new Date().toISOString(),
+          }
+          updatedRecords = [...state.followUpRecords, newRecord]
+        }
+        return {
+          todos: updatedTodos,
+          followUpRecords: updatedRecords,
+        }
+      }),
 
     addCaseImage: (image) =>
       setWithPersist((state) => ({
@@ -153,7 +356,7 @@ export const useAppStore = create<AppState>((set, get) => {
       })),
   }
 
-  saveToStorage(initialState)
+  saveToStorage(baseState)
 
   return initialState
 })

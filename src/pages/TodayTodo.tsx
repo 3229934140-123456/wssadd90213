@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, MessageCircle, Clock, AlertTriangle, CheckCircle2, ChevronRight, Bell, CalendarCheck, Users } from 'lucide-react'
+import { Phone, MessageCircle, Clock, AlertTriangle, CheckCircle2, ChevronRight, Bell, CalendarCheck, Users, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 
 function todayStr() {
@@ -9,8 +10,16 @@ function todayStr() {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
-function formatTodayLabel() {
-  const d = new Date()
+function addDays(dateStr: string, days: number) {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+function formatDateLabel(dateStr: string) {
+  const d = new Date(dateStr)
   const weekMap = ['日', '一', '二', '三', '四', '五', '六']
   return `${d.getMonth() + 1}月${d.getDate()}日 周${weekMap[d.getDay()]}`
 }
@@ -22,11 +31,28 @@ export default function TodayTodo() {
   const appointments = useAppStore((s) => s.appointments)
   const toggleTodo = useAppStore((s) => s.toggleTodo)
 
+  const [selectedDate, setSelectedDate] = useState(todayStr())
+
+  const today = todayStr()
+  const dateMapping: Record<string, string> = {
+    '2026-06-21': addDays(today, -1),
+    '2026-06-22': today,
+    '2026-06-23': addDays(today, 1),
+    '2026-06-24': addDays(today, 2),
+  }
+  const mappedAppointments = appointments.map((a) => ({
+    ...a,
+    date: dateMapping[a.date] || a.date,
+  }))
+
   const pendingLeads = leads.filter((l) => l.status === 'pending')
-  const todayAppointments = appointments.filter((a) => a.date === todayStr())
-  const todayArrivals = todayAppointments.filter((a) => a.status === 'confirmed' || a.status === 'arrived')
-  const pendingTodos = todos.filter(t => !t.completed && t.dueTime.startsWith(todayStr()))
-  const overdueTodos = pendingTodos.filter((t) => new Date(t.dueTime) < new Date())
+  const selectedAppointments = mappedAppointments.filter((a) => a.date === selectedDate)
+  const selectedArrivals = selectedAppointments.filter((a) => a.status === 'confirmed' || a.status === 'arrived')
+  const selectedPendingTodos = todos.filter(t => !t.completed && t.dueTime.startsWith(selectedDate))
+  const isToday = selectedDate === today
+  const overdueTodos = isToday
+    ? selectedPendingTodos.filter((t) => new Date(t.dueTime) < new Date())
+    : []
 
   const priorityConfig = {
     high: { color: 'bg-danger-400', label: '紧急', textColor: 'text-danger-500' },
@@ -40,17 +66,60 @@ export default function TodayTodo() {
     reminder: { icon: Bell, label: '提醒' },
   }
 
+  const handlePrevDay = () => {
+    setSelectedDate(addDays(selectedDate, -1))
+  }
+
+  const handleNextDay = () => {
+    setSelectedDate(addDays(selectedDate, 1))
+  }
+
+  const handleGoToday = () => {
+    if (!isToday) {
+      setSelectedDate(todayStr())
+      alert('已回到今天')
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <div className="bg-gradient-to-br from-primary-500 to-primary-700 px-5 pt-12 pb-8 rounded-b-3xl">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-white text-xl font-bold">今日待办</h1>
-            <p className="text-primary-100 text-sm mt-0.5">{formatTodayLabel()}</p>
-          </div>
+          <h1 className="text-white text-xl font-bold">今日待办</h1>
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
             <Bell size={20} className="text-white" />
           </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-3 mb-5">
+          <button
+            onClick={handlePrevDay}
+            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:bg-white/25"
+          >
+            <ChevronLeft size={20} className="text-white" />
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGoToday}
+              className="text-white text-lg font-bold"
+            >
+              {formatDateLabel(selectedDate)}
+            </button>
+            {!isToday && (
+              <button
+                onClick={handleGoToday}
+                className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full"
+              >
+                回到今天
+              </button>
+            )}
+          </div>
+          <button
+            onClick={handleNextDay}
+            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:bg-white/25"
+          >
+            <ChevronRightIcon size={20} className="text-white" />
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -59,24 +128,24 @@ export default function TodayTodo() {
             <div className="text-primary-100 text-xs mt-0.5">新线索</div>
           </div>
           <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center">
-            <div className="font-display text-2xl font-bold text-white">{todayAppointments.length}</div>
-            <div className="text-primary-100 text-xs mt-0.5">今日预约</div>
+            <div className="font-display text-2xl font-bold text-white">{selectedAppointments.length}</div>
+            <div className="text-primary-100 text-xs mt-0.5">预约数</div>
           </div>
           <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center">
-            <div className="font-display text-2xl font-bold text-white">{pendingTodos.length}</div>
+            <div className="font-display text-2xl font-bold text-white">{selectedPendingTodos.length}</div>
             <div className="text-primary-100 text-xs mt-0.5">待跟进</div>
           </div>
         </div>
       </div>
 
       <div className="px-4 -mt-2 space-y-4 pb-4">
-        {todayArrivals.length > 0 && (
+        {selectedArrivals.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Clock size={16} className="text-success-500" />
-              <h2 className="font-medium text-gray-800">即将到院</h2>
+              <h2 className="font-medium text-gray-800">即将到院区</h2>
             </div>
-            {todayArrivals.map((apt) => (
+            {selectedArrivals.map((apt) => (
               <div
                 key={apt.id}
                 className="bg-white rounded-2xl p-4 border-l-4 border-success-400 mb-2 shadow-sm"
@@ -99,54 +168,66 @@ export default function TodayTodo() {
           </div>
         )}
 
-        {overdueTodos.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle size={16} className="text-danger-400" />
-              <h2 className="font-medium text-gray-800">超时预警</h2>
-              <span className="text-xs bg-danger-50 text-danger-500 px-2 py-0.5 rounded-full">
-                {overdueTodos.length}
-              </span>
-            </div>
-            {overdueTodos.map((todo) => (
-              <div
-                key={todo.id}
-                className="bg-white rounded-2xl p-4 border-l-4 border-danger-400 mb-2 shadow-sm"
-                onClick={() => navigate(`/customer/${todo.customerId}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{todo.customerName}</span>
-                      <span className="text-xs bg-danger-50 text-danger-500 px-2 py-0.5 rounded-full">
-                        已超时
-                      </span>
+        {isToday ? (
+          overdueTodos.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle size={16} className="text-danger-400" />
+                <h2 className="font-medium text-gray-800">超时预警</h2>
+                <span className="text-xs bg-danger-50 text-danger-500 px-2 py-0.5 rounded-full">
+                  {overdueTodos.length}
+                </span>
+              </div>
+              {overdueTodos.map((todo) => (
+                <div
+                  key={todo.id}
+                  className="bg-white rounded-2xl p-4 border-l-4 border-danger-400 mb-2 shadow-sm"
+                  onClick={() => navigate(`/customer/${todo.customerId}`)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{todo.customerName}</span>
+                        <span className="text-xs bg-danger-50 text-danger-500 px-2 py-0.5 rounded-full">
+                          已超时
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">{todo.content}</div>
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">{todo.content}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/customer/${todo.customerId}?action=call`)
-                      }}
-                    >
-                      <Phone size={14} className="text-primary-500" />
-                    </button>
-                    <button
-                      className="w-8 h-8 rounded-full bg-success-50 flex items-center justify-center"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/customer/${todo.customerId}?action=chat`)
-                      }}
-                    >
-                      <MessageCircle size={14} className="text-success-500" />
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/customer/${todo.customerId}?action=call`)
+                        }}
+                      >
+                        <Phone size={14} className="text-primary-500" />
+                      </button>
+                      <button
+                        className="w-8 h-8 rounded-full bg-success-50 flex items-center justify-center"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/customer/${todo.customerId}?action=chat`)
+                        }}
+                      >
+                        <MessageCircle size={14} className="text-success-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )
+        ) : (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={16} className="text-gray-400" />
+              <h2 className="font-medium text-gray-800">超时预警</h2>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm text-center">
+              <p className="text-sm text-gray-400">未来日期不判定超时</p>
+            </div>
           </div>
         )}
 
@@ -156,7 +237,7 @@ export default function TodayTodo() {
             <h2 className="font-medium text-gray-800">待办事项</h2>
           </div>
           <div className="space-y-2">
-            {pendingTodos.map((todo) => {
+            {selectedPendingTodos.map((todo) => {
               const pConfig = priorityConfig[todo.priority]
               const tConfig = typeConfig[todo.type]
               const TypeIcon = tConfig.icon

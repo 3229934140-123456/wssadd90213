@@ -29,6 +29,7 @@ export interface Customer {
   phone: string
   createdAt: string
   nextFollowUp?: string
+  nextFollowUpPurpose?: string
 }
 
 export type FollowUpType = 'phone' | 'message' | 'note'
@@ -74,6 +75,7 @@ export interface TodoItem {
   dueTime: string
   priority: TodoPriority
   completed: boolean
+  purpose?: string
 }
 
 export interface DailyTrend {
@@ -107,3 +109,7 @@ export interface CaseImage {
 }
 
 export const STAGE_ORDER: CustomerStage[] = ['初问价', '看案例', '约面诊', '已到院']
+
+export const PROJECT_NAMES = ['鼻综合', '双眼皮', '隆胸', '吸脂', '注射类', '热玛吉', '其他'] as const
+
+export const LOST_REASON_LIST = ['价格超出预算', '选择其他机构', '暂时不想做', '家人反对', '身体原因不适合', '其他'] as const

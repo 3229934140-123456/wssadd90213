@@ -75,7 +75,13 @@ export default function CustomerDetail() {
 
   const [newRecord, setNewRecord] = useState('')
   const [recordType, setRecordType] = useState<FollowUpType>('note')
-  const [showFollowUpPicker, setShowFollowUpPicker] = useState(false)
+  const [showFollowUpPanel, setShowFollowUpPanel] = useState(false)
+  const [followUpPurpose, setFollowUpPurpose] = useState('')
+
+  const quickPurposes = [
+    '确认面诊时间', '报价回访', '案例发送跟进', '决策期跟进',
+    '术前准备告知', '术后回访', '发送优惠活动', '意向确认'
+  ]
 
   const [showNoteAfterCall, setShowNoteAfterCall] = useState(false)
   const [callNote, setCallNote] = useState('')
@@ -124,8 +130,9 @@ export default function CustomerDetail() {
   const handleSetFollowUp = (hours: number) => {
     const nextTime = new Date()
     nextTime.setHours(nextTime.getHours() + hours)
-    setNextFollowUp(id!, nextTime.toISOString())
-    setShowFollowUpPicker(false)
+    setNextFollowUp(id!, nextTime.toISOString(), followUpPurpose)
+    setShowFollowUpPanel(false)
+    setFollowUpPurpose('')
   }
 
   const handlePhoneClick = () => {
@@ -367,7 +374,12 @@ export default function CustomerDetail() {
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-500">二次跟进</h3>
+            <h3 className="text-sm font-medium text-gray-500 flex items-center gap-2">
+              二次跟进
+              {customer.nextFollowUp && customer.nextFollowUpPurpose && (
+                <span className="text-xs text-gray-400 font-normal">· {customer.nextFollowUpPurpose}</span>
+              )}
+            </h3>
             {customer.nextFollowUp && (
               <span className="text-xs text-primary-500 flex items-center gap-1">
                 <Clock size={12} />
@@ -375,25 +387,54 @@ export default function CustomerDetail() {
               </span>
             )}
           </div>
-          {!showFollowUpPicker ? (
+          {!showFollowUpPanel ? (
             <button
-              onClick={() => setShowFollowUpPicker(true)}
+              onClick={() => setShowFollowUpPanel(true)}
               className="w-full py-2.5 bg-primary-50 text-primary-600 rounded-xl text-sm font-medium flex items-center justify-center gap-1"
             >
               <Calendar size={14} />
-              设置跟进时间
+              设置跟进时间 →
             </button>
           ) : (
-            <div className="flex gap-2">
-              {[2, 4, 8, 24, 48].map((h) => (
-                <button
-                  key={h}
-                  onClick={() => handleSetFollowUp(h)}
-                  className="flex-1 py-2 bg-primary-50 text-primary-600 rounded-xl text-xs font-medium"
-                >
-                  {h < 24 ? `${h}小时后` : `${h / 24}天后`}
-                </button>
-              ))}
+            <div className="space-y-3">
+              <div className="bg-gray-50 rounded-xl p-3 space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block">跟进目的</label>
+                  <input
+                    type="text"
+                    value={followUpPurpose}
+                    onChange={(e) => setFollowUpPurpose(e.target.value)}
+                    placeholder="这次跟进要做什么"
+                    className="w-full bg-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-200 border border-gray-100"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {quickPurposes.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setFollowUpPurpose(p)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] transition-all ${
+                        followUpPurpose === p
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-white text-gray-600 border border-gray-200 hover:border-primary-300 hover:text-primary-500'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {[2, 4, 8, 24, 48].map((h) => (
+                  <button
+                    key={h}
+                    onClick={() => handleSetFollowUp(h)}
+                    className="flex-1 py-2 bg-primary-50 text-primary-600 rounded-xl text-xs font-medium hover:bg-primary-100 transition-colors"
+                  >
+                    {h < 24 ? `${h}小时后` : `${h / 24}天后`}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
