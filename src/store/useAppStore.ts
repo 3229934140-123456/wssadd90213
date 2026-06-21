@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import type { Lead, Customer, FollowUpRecord, Appointment, TodoItem, Performance, CaseImage, CustomerStage, AppointmentStatus, Distribution, DailyTrend } from '@/types'
+import type { Lead, Customer, FollowUpRecord, Appointment, TodoItem, Performance, CaseImage, CustomerStage, AppointmentStatus, Distribution, DailyTrend, UIState, AppointmentResult } from '@/types'
 import { mockLeads, mockCustomers, mockFollowUpRecords, mockAppointments, mockTodos, mockPerformance, mockCaseImages } from '@/data/mock'
 
 const STORAGE_KEY = 'cosmetic-reception-desk-v1'
-const PERSIST_FIELDS = ['leads', 'customers', 'followUpRecords', 'appointments', 'todos', 'caseImages'] as const
+const PERSIST_FIELDS = ['leads', 'customers', 'followUpRecords', 'appointments', 'todos', 'caseImages', 'ui'] as const
 
 type PersistState = Pick<AppState, typeof PERSIST_FIELDS[number]>
 
@@ -14,6 +14,7 @@ interface PersistableState {
   appointments: Appointment[]
   todos: TodoItem[]
   caseImages: CaseImage[]
+  ui: UIState
 }
 
 function loadFromStorage(): Partial<PersistState> | null {
@@ -37,6 +38,7 @@ function saveToStorage(state: PersistableState) {
       appointments: state.appointments,
       todos: state.todos,
       caseImages: state.caseImages,
+      ui: state.ui,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
   } catch {}
@@ -271,11 +273,14 @@ interface AppState extends PersistableState {
   updateCustomerStage: (customerId: string, stage: CustomerStage) => void
   addFollowUpRecord: (record: Omit<FollowUpRecord, 'id' | 'createdAt'>) => void
   setNextFollowUp: (customerId: string, time: string, purpose?: string) => void
+  addAppointment: (apt: Omit<Appointment, 'id' | 'reminderSent'>) => void
   updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void
-  setAppointmentResult: (appointmentId: string, result: { type: 'deal' | 'lost'; amount?: number; project?: string; reason?: string }) => void
+  setAppointmentResult: (appointmentId: string, result: AppointmentResult) => void
   sendReminder: (appointmentId: string) => void
   toggleTodo: (todoId: string) => void
   addCaseImage: (image: Omit<CaseImage, 'id' | 'sentAt'>) => void
+  setSelectedAppointmentDate: (date: string) => void
+  setSelectedTodoDate: (date: string) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -290,6 +295,7 @@ export const useAppStore = create<AppState>((set, get) => {
         appointments: partial.appointments ?? prev.appointments,
         todos: partial.todos ?? prev.todos,
         caseImages: partial.caseImages ?? prev.caseImages,
+        ui: partial.ui ?? prev.ui,
       }
       const nextPerformance = getPerformance(nextData)
       const next = {
@@ -304,6 +310,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
   const stored = loadFromStorage()
 
+  const defaultUI: UIState = {
+    selectedAppointmentDate: todayStr(),
+    selectedTodoDate: todayStr(),
+  }
+
   const baseState: PersistableState = {
     leads: stored?.leads ?? mockLeads,
     customers: stored?.customers ?? mockCustomers,
@@ -311,6 +322,7 @@ export const useAppStore = create<AppState>((set, get) => {
     appointments: stored?.appointments ?? mockAppointments,
     todos: stored?.todos ?? mockTodos,
     caseImages: stored?.caseImages ?? mockCaseImages,
+    ui: stored?.ui ?? defaultUI,
   }
 
   const initialState: AppState = {
@@ -440,6 +452,27 @@ export const useAppStore = create<AppState>((set, get) => {
           },
         ],
       })),
+
+    addAppointment: (apt) => {
+      setWithPersist((s) => ({
+        appointments: [
+          ...s.appointments,
+          {
+            ...apt,
+            id: `a${Date.now()}`,
+            reminderSent: false,
+          },
+        ],
+      }))
+    },
+
+    setSelectedAppointmentDate: (date) => {
+      setWithPersist((s) => ({ ui: { ...s.ui, selectedAppointmentDate: date } }))
+    },
+
+    setSelectedTodoDate: (date) => {
+      setWithPersist((s) => ({ ui: { ...s.ui, selectedTodoDate: date } }))
+    },
   }
 
   saveToStorage(baseState)

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Phone, MessageCircle, FileText, ImagePlus, Clock,
   Sparkles, ShoppingBag, ChevronRight, Send, Calendar, X,
-  Image as ImageIcon
+  Image as ImageIcon, MessageSquare
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { STAGE_ORDER } from '@/types'
@@ -293,10 +293,30 @@ export default function CustomerDetail() {
           </div>
 
           <div className="space-y-3 mb-3 max-h-72 overflow-y-auto">
-            {records.length === 0 && (
-              <p className="text-sm text-gray-300 text-center py-4">暂无沟通记录，点击底部按钮开始联系</p>
-            )}
-            {records.map((record, i) => {
+            {records.length === 0 ? (
+              <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-5 text-center border border-gray-100">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-primary-100 flex items-center justify-center">
+                  <MessageSquare size={24} className="text-primary-500" />
+                </div>
+                <p className="text-gray-800 font-medium mb-1">还没有沟通过</p>
+                <p className="text-sm text-gray-400 mb-4">开始第一次联系，建立良好的客户关系</p>
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={handlePhoneClick}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium active:bg-blue-600 transition flex items-center gap-1"
+                  >
+                    📞 电话联系
+                  </button>
+                  <button
+                    onClick={() => setShowChat(true)}
+                    className="bg-success-500 text-white px-4 py-2 rounded-xl text-sm font-medium active:bg-success-600 transition flex items-center gap-1"
+                  >
+                    💬 私信联系
+                  </button>
+                </div>
+              </div>
+            ) : (
+              records.map((record, i) => {
               const Icon = followUpIcons[record.type]
               return (
                 <div key={record.id} className="flex gap-3">
@@ -323,7 +343,8 @@ export default function CustomerDetail() {
                   </div>
                 </div>
               )
-            })}
+            })
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -346,30 +367,42 @@ export default function CustomerDetail() {
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-sm font-medium text-gray-500 mb-3">案例发送</h3>
-          {images.length > 0 && (
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              {images.map((img) => (
-                <div key={img.id} className="aspect-square rounded-xl bg-gray-100 overflow-hidden relative group">
-                  <img src={img.url} alt={img.note} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 p-2 flex flex-col justify-end">
-                    <div className="text-white text-[10px] font-medium leading-tight line-clamp-2">{img.note}</div>
-                    <div className="text-white/70 text-[9px] mt-0.5">{formatTime(img.sentAt)}</div>
+          {images.length > 0 ? (
+            <>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {images.map((img) => (
+                  <div key={img.id} className="aspect-square rounded-xl bg-gray-100 overflow-hidden relative group">
+                    <img src={img.url} alt={img.note} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 p-2 flex flex-col justify-end">
+                      <div className="text-white text-[10px] font-medium leading-tight line-clamp-2">{img.note}</div>
+                      <div className="text-white/70 text-[9px] mt-0.5">{formatTime(img.sentAt)}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <button
+                onClick={() => setShowCasePicker(true)}
+                className="w-full rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-sm transition-all border-gray-200 text-gray-400 py-2 hover:border-primary-300 hover:text-primary-500"
+              >
+                <ImagePlus size={20} />
+                <span>发送新案例</span>
+              </button>
+            </>
+          ) : (
+            <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl p-5 text-center border border-primary-100">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-primary-100 flex items-center justify-center">
+                <ImagePlus size={24} className="text-primary-500" />
+              </div>
+              <p className="text-gray-800 font-medium mb-1">还没有发送过案例</p>
+              <p className="text-sm text-gray-400 mb-4">发送相关案例帮助顾客做出决策</p>
+              <button
+                onClick={() => setShowCasePicker(true)}
+                className="bg-primary-500 text-white px-5 py-2 rounded-xl text-sm font-medium active:bg-primary-600 transition"
+              >
+                选择案例发送 →
+              </button>
             </div>
           )}
-          <button
-            onClick={() => setShowCasePicker(true)}
-            className={`w-full rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-sm transition-all ${
-              images.length > 0
-                ? 'border-gray-200 text-gray-400 py-2 hover:border-primary-300 hover:text-primary-500'
-                : 'border-gray-200 text-gray-300 py-8 hover:border-primary-300 hover:text-primary-400 flex-col'
-            }`}
-          >
-            <ImagePlus size={20} />
-            <span>{images.length > 0 ? '发送新案例' : '选择案例图发送给顾客'}</span>
-          </button>
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">

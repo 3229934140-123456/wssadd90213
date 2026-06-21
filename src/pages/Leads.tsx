@@ -154,7 +154,7 @@ export default function Leads() {
       </div>
 
       <div className="px-4 -mt-2 space-y-3 pb-4">
-        {pendingLeads.length > 0 && (
+        {pendingLeads.length > 0 ? (
           <div>
             <h2 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-1">
               <Bell size={14} className="text-danger-400" />
@@ -168,6 +168,20 @@ export default function Leads() {
                 onTransfer={handleTransfer}
               />
             ))}
+          </div>
+        ) : (
+          <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl p-6 text-center border border-primary-100">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-primary-100 flex items-center justify-center">
+              <Sparkles size={24} className="text-primary-500" />
+            </div>
+            <p className="text-gray-800 font-medium mb-1">暂时没有新线索</p>
+            <p className="text-sm text-gray-400 mb-4">新线索会实时推送到这里</p>
+            <button
+              onClick={() => {}}
+              className="bg-gray-100 text-gray-600 px-5 py-2 rounded-xl text-sm font-medium active:bg-gray-200 transition"
+            >
+              下拉刷新看看？
+            </button>
           </div>
         )}
 

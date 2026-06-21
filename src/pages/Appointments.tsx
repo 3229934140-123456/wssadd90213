@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  CalendarCheck,
+  CalendarPlus,
   Clock,
   Send,
   CheckCircle,
@@ -14,6 +14,7 @@ import {
   Users,
   BellRing,
   ClipboardList,
+  Plus,
 } from 'lucide-react'
 import { useAppStore, todayStr, addDays, formatDateLabel, getWeekDays, mapMockAppointments, mapMockTodos } from '@/store/useAppStore'
 import type { Appointment, AppointmentStatus } from '@/types'
@@ -39,11 +40,14 @@ export default function Appointments() {
   const navigate = useNavigate()
   const appointments = useAppStore((s) => s.appointments)
   const todos = useAppStore((s) => s.todos)
+  const customers = useAppStore((s) => s.customers)
+  const selectedDate = useAppStore((s) => s.ui.selectedAppointmentDate)
+  const setSelectedDate = useAppStore((s) => s.setSelectedAppointmentDate)
   const updateAppointmentStatus = useAppStore((s) => s.updateAppointmentStatus)
   const setAppointmentResult = useAppStore((s) => s.setAppointmentResult)
   const sendReminder = useAppStore((s) => s.sendReminder)
+  const addAppointment = useAppStore((s) => s.addAppointment)
 
-  const [selectedDate, setSelectedDate] = useState(todayStr())
   const [weekBase, setWeekBase] = useState(todayStr())
   const [showResultSheet, setShowResultSheet] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -51,10 +55,18 @@ export default function Appointments() {
   const [dealAmount, setDealAmount] = useState('')
   const [dealProject, setDealProject] = useState('')
   const [lostReason, setLostReason] = useState('')
+  const [showNewSheet, setShowNewSheet] = useState(false)
+  const [newCustomerId, setNewCustomerId] = useState('')
+  const [newProject, setNewProject] = useState('')
+  const [newDate, setNewDate] = useState('')
+  const [newTime, setNewTime] = useState('09:00')
+  const [newStatus, setNewStatus] = useState<AppointmentStatus>('pending')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'wechat' | 'alipay' | 'card' | 'medical_insurance' | 'other'>('wechat')
+  const [paymentType, setPaymentType] = useState<'deposit' | 'full'>('full')
+  const [note, setNote] = useState('')
 
   const weekDays = getWeekDays(weekBase)
 
-  const today = todayStr()
   const mappedAppointments = mapMockAppointments(appointments)
   const mappedTodos = mapMockTodos(todos)
 
@@ -106,6 +118,44 @@ export default function Appointments() {
     setWeekBase(todayStr())
   }
 
+  const handleOpenNewSheet = () => {
+    const selectedCustomer = customers.find((c) => c.id === newCustomerId)
+    setNewCustomerId(customers[0]?.id || '')
+    setNewProject(selectedCustomer?.project || customers[0]?.project || '')
+    setNewDate(selectedDate)
+    setNewTime('09:00')
+    setNewStatus('pending')
+    setShowNewSheet(true)
+  }
+
+  const handleCustomerChange = (customerId: string) => {
+    setNewCustomerId(customerId)
+    const customer = customers.find((c) => c.id === customerId)
+    if (customer) {
+      setNewProject(customer.project)
+    }
+  }
+
+  const handleSubmitNewAppointment = () => {
+    if (!newCustomerId || !newProject || !newDate || !newTime) return
+
+    const customer = customers.find((c) => c.id === newCustomerId)
+    if (!customer) return
+
+    addAppointment({
+      customerId: newCustomerId,
+      customerName: customer.nickname,
+      project: newProject,
+      date: newDate,
+      time: newTime,
+      status: newStatus,
+    })
+
+    setShowNewSheet(false)
+    setSelectedDate(newDate)
+    setWeekBase(newDate)
+  }
+
   const handleSendReminder = (appointmentId: string) => {
     sendReminder(appointmentId)
   }
@@ -116,6 +166,9 @@ export default function Appointments() {
     setDealAmount('')
     setDealProject('')
     setLostReason('')
+    setPaymentMethod('wechat')
+    setPaymentType('full')
+    setNote('')
     setShowResultSheet(true)
   }
 
@@ -126,6 +179,9 @@ export default function Appointments() {
         type: 'deal',
         amount: Number(dealAmount) || 0,
         project: dealProject || selectedAppointment.project,
+        paymentMethod,
+        paymentType,
+        note,
       })
     } else {
       setAppointmentResult(selectedAppointment.id, {
@@ -143,7 +199,16 @@ export default function Appointments() {
         <div className="absolute -left-10 bottom-0 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
 
         <div className="relative">
-          <h1 className="text-white text-2xl font-bold mb-1">预约工作台</h1>
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-white text-2xl font-bold">预约工作台</h1>
+            <button
+              onClick={handleOpenNewSheet}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/60 text-white text-sm font-medium hover:bg-white/15 transition-all active:scale-95 backdrop-blur-sm"
+            >
+              <Plus size={16} />
+              新预约
+            </button>
+          </div>
           <p className="text-primary-100 text-sm mb-6">管理到院预约与成交登记</p>
 
           <div className="flex items-center justify-between">
@@ -332,11 +397,18 @@ export default function Appointments() {
 
         {dayAppointments.length === 0 ? (
           <div className="bg-white rounded-2xl p-10 shadow-sm text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gray-50 mx-auto flex items-center justify-center mb-3">
-              <CalendarCheck size={28} className="text-gray-300" />
+            <div className="w-16 h-16 rounded-2xl bg-primary-50 mx-auto flex items-center justify-center mb-3">
+              <CalendarPlus size={28} className="text-primary-500" />
             </div>
-            <p className="text-gray-400 text-sm">当日暂无预约</p>
-            <p className="text-gray-300 text-xs mt-1">可以添加新的预约安排</p>
+            <p className="text-gray-600 text-sm font-medium mb-1">当天暂无预约</p>
+            <p className="text-gray-400 text-xs mb-4">点击下方按钮新建一个预约</p>
+            <button
+              onClick={handleOpenNewSheet}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl text-sm font-medium shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all active:scale-95"
+            >
+              <Plus size={16} />
+              新建一个
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -522,6 +594,66 @@ export default function Appointments() {
                     className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-success-200 focus:bg-white transition-all border border-transparent focus:border-success-200"
                   />
                 </div>
+                <div>
+                  <label className="text-sm text-gray-500 mb-1.5 block">付款方式</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: '现金', value: 'cash' },
+                      { label: '微信', value: 'wechat' },
+                      { label: '支付宝', value: 'alipay' },
+                      { label: '刷卡', value: 'card' },
+                      { label: '医保', value: 'medical_insurance' },
+                      { label: '其他', value: 'other' },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        onClick={() => setPaymentMethod(item.value as 'cash' | 'wechat' | 'alipay' | 'card' | 'medical_insurance' | 'other')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
+                          paymentMethod === item.value
+                            ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/30'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500 mb-1.5 block">付款类型</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPaymentType('deposit')}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-98 ${
+                        paymentType === 'deposit'
+                          ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/30'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      定金
+                    </button>
+                    <button
+                      onClick={() => setPaymentType('full')}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-98 ${
+                        paymentType === 'full'
+                          ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/30'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      全款
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500 mb-1.5 block">备注</label>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="填写备注信息（可选）"
+                    rows={3}
+                    className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-success-200 focus:bg-white transition-all border border-transparent focus:border-success-200 resize-none"
+                  />
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -547,6 +679,107 @@ export default function Appointments() {
               className="mt-5 w-full py-3.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all active:scale-[0.98]"
             >
               提交
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showNewSheet && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
+            onClick={() => setShowNewSheet(false)}
+          />
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl p-5 safe-bottom animate-slide-up shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-gray-800">新建预约</h3>
+              <button
+                onClick={() => setShowNewSheet(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
+              >
+                <X size={16} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="text-sm text-gray-500 mb-1.5 block">选择顾客</label>
+                <select
+                  value={newCustomerId}
+                  onChange={(e) => handleCustomerChange(e.target.value)}
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary-200 focus:bg-white transition-all border border-transparent focus:border-primary-200 appearance-none"
+                >
+                  <option value="">请选择顾客</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.nickname} · {customer.project}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-500 mb-1.5 block">项目</label>
+                <input
+                  type="text"
+                  value={newProject}
+                  onChange={(e) => setNewProject(e.target.value)}
+                  placeholder="请输入项目名称"
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary-200 focus:bg-white transition-all border border-transparent focus:border-primary-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm text-gray-500 mb-1.5 block">日期</label>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary-200 focus:bg-white transition-all border border-transparent focus:border-primary-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500 mb-1.5 block">时间</label>
+                  <input
+                    type="time"
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary-200 focus:bg-white transition-all border border-transparent focus:border-primary-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-500 mb-1.5 block">确认状态</label>
+                <div className="flex gap-2">
+                  {[
+                    { value: 'pending', label: '待确认', bgActive: 'bg-warning-500', bgInactive: 'bg-warning-50', textActive: 'text-white', textInactive: 'text-warning-600' },
+                    { value: 'confirmed', label: '已确认', bgActive: 'bg-blue-500', bgInactive: 'bg-blue-50', textActive: 'text-white', textInactive: 'text-blue-600' },
+                    { value: 'arrived', label: '已到院', bgActive: 'bg-primary-500', bgInactive: 'bg-primary-50', textActive: 'text-white', textInactive: 'text-primary-600' },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      onClick={() => setNewStatus(item.value as AppointmentStatus)}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 ${
+                        newStatus === item.value
+                          ? `${item.bgActive} ${item.textActive} shadow-sm`
+                          : `${item.bgInactive} ${item.textInactive} hover:opacity-80`
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSubmitNewAppointment}
+              disabled={!newCustomerId || !newProject || !newDate || !newTime}
+              className="mt-5 w-full py-3.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              保存预约
             </button>
           </div>
         </div>

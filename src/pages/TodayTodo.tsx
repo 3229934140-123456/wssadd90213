@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, MessageCircle, Clock, AlertTriangle, CheckCircle2, ChevronRight, Bell, CalendarCheck, Users, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { Phone, MessageCircle, Clock, AlertTriangle, CheckCircle2, ChevronRight, Bell, CalendarCheck, Users, ChevronLeft, ChevronRight as ChevronRightIcon, ListTodo } from 'lucide-react'
 import { useAppStore, todayStr, addDays, formatDateLabel, mapMockTodos, mapMockAppointments } from '@/store/useAppStore'
 
 export default function TodayTodo() {
@@ -9,8 +8,8 @@ export default function TodayTodo() {
   const todos = useAppStore((s) => s.todos)
   const appointments = useAppStore((s) => s.appointments)
   const toggleTodo = useAppStore((s) => s.toggleTodo)
-
-  const [selectedDate, setSelectedDate] = useState(todayStr())
+  const selectedDate = useAppStore((s) => s.ui.selectedTodoDate)
+  const setSelectedDate = useAppStore((s) => s.setSelectedTodoDate)
 
   const today = todayStr()
   const mappedTodos = mapMockTodos(todos)
@@ -95,7 +94,7 @@ export default function TodayTodo() {
 
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center">
-            <div className="font-display text-2xl font-bold text-white">{pendingLeads.length}</div>
+            <div className={`font-display text-2xl font-bold ${pendingLeads.length === 0 ? 'text-white/40' : 'text-white'}`}>{pendingLeads.length}</div>
             <div className="text-primary-100 text-xs mt-0.5">新线索</div>
           </div>
           <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center">
@@ -110,13 +109,13 @@ export default function TodayTodo() {
       </div>
 
       <div className="px-4 -mt-2 space-y-4 pb-4">
-        {selectedArrivals.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Clock size={16} className="text-success-500" />
-              <h2 className="font-medium text-gray-800">即将到院区</h2>
-            </div>
-            {selectedArrivals.map((apt) => (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Clock size={16} className="text-success-500" />
+            <h2 className="font-medium text-gray-800">即将到院区</h2>
+          </div>
+          {selectedArrivals.length > 0 ? (
+            selectedArrivals.map((apt) => (
               <div
                 key={apt.id}
                 className="bg-white rounded-2xl p-4 border-l-4 border-success-400 mb-2 shadow-sm"
@@ -135,9 +134,11 @@ export default function TodayTodo() {
                   <ChevronRight size={16} className="text-gray-300" />
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-2">今天没有即将到院的顾客</p>
+          )}
+        </div>
 
         {isToday ? (
           overdueTodos.length > 0 && (
@@ -214,58 +215,74 @@ export default function TodayTodo() {
             <CheckCircle2 size={16} className="text-primary-500" />
             <h2 className="font-medium text-gray-800">待办事项</h2>
           </div>
-          <div className="space-y-2">
-            {selectedPendingTodos.map((todo) => {
-              const pConfig = priorityConfig[todo.priority]
-              const tConfig = typeConfig[todo.type]
-              const TypeIcon = tConfig.icon
-              return (
-                <div
-                  key={todo.id}
-                  className="bg-white rounded-2xl overflow-hidden shadow-sm"
-                  onClick={() => navigate(`/customer/${todo.customerId}`)}
-                >
-                  <div className="flex items-stretch">
-                    <div className={`w-1 ${pConfig.color}`} />
-                    <div className="flex-1 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <TypeIcon size={14} className="text-gray-400" />
-                          <span className="font-medium text-sm">{todo.customerName}</span>
-                          <span className={`text-[10px] ${pConfig.textColor}`}>
-                            {pConfig.label}
+          {selectedPendingTodos.length > 0 ? (
+            <div className="space-y-2">
+              {selectedPendingTodos.map((todo) => {
+                const pConfig = priorityConfig[todo.priority]
+                const tConfig = typeConfig[todo.type]
+                const TypeIcon = tConfig.icon
+                return (
+                  <div
+                    key={todo.id}
+                    className="bg-white rounded-2xl overflow-hidden shadow-sm"
+                    onClick={() => navigate(`/customer/${todo.customerId}`)}
+                  >
+                    <div className="flex items-stretch">
+                      <div className={`w-1 ${pConfig.color}`} />
+                      <div className="flex-1 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <TypeIcon size={14} className="text-gray-400" />
+                            <span className="font-medium text-sm">{todo.customerName}</span>
+                            <span className={`text-[10px] ${pConfig.textColor}`}>
+                              {pConfig.label}
+                            </span>
+                          </div>
+                          <button
+                            className="w-6 h-6 rounded-full border-2 border-gray-200 flex items-center justify-center"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleTodo(todo.id)
+                            }}
+                          >
+                            <div className="w-3 h-3 rounded-full bg-transparent" />
+                          </button>
+                        </div>
+                        {todo.purpose ? (
+                          <>
+                            <p className="font-medium text-gray-900 mt-1">{todo.purpose}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{todo.content}</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-500 mt-1">{todo.content}</p>
+                        )}
+                        <div className="flex items-center gap-1 mt-1.5">
+                          <Clock size={12} className="text-gray-300" />
+                          <span className="text-xs text-gray-400">
+                            {new Date(todo.dueTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <button
-                          className="w-6 h-6 rounded-full border-2 border-gray-200 flex items-center justify-center"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleTodo(todo.id)
-                          }}
-                        >
-                          <div className="w-3 h-3 rounded-full bg-transparent" />
-                        </button>
-                      </div>
-                      {todo.purpose ? (
-                        <>
-                          <p className="font-medium text-gray-900 mt-1">{todo.purpose}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{todo.content}</p>
-                        </>
-                      ) : (
-                        <p className="text-sm text-gray-500 mt-1">{todo.content}</p>
-                      )}
-                      <div className="flex items-center gap-1 mt-1.5">
-                        <Clock size={12} className="text-gray-300" />
-                        <span className="text-xs text-gray-400">
-                          {new Date(todo.dueTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
                       </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl p-6 text-center border border-primary-100">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-primary-100 flex items-center justify-center">
+                <ListTodo size={24} className="text-primary-500" />
+              </div>
+              <p className="text-gray-800 font-medium mb-1">今天暂无待跟进事项</p>
+              <p className="text-sm text-gray-400 mb-4">可以去顾客列表设置新的跟进计划</p>
+              <button
+                onClick={() => navigate('/appointments')}
+                className="bg-primary-500 text-white px-5 py-2 rounded-xl text-sm font-medium active:bg-primary-600 transition"
+              >
+                去顾客列表设置跟进 →
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

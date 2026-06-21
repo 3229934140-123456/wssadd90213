@@ -1,7 +1,22 @@
-import { BarChart3, TrendingUp, Users, CalendarCheck, DollarSign, Award, Sparkles, ShoppingBag, Store } from 'lucide-react'
+import { BarChart3, TrendingUp, Users, CalendarCheck, DollarSign, Award, Sparkles, ShoppingBag, Store, ChevronRight, ArrowRight } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { useAppStore, mapMockAppointments } from '@/store/useAppStore'
+import { useNavigate } from 'react-router-dom'
+import { useAppStore, mapMockAppointments, formatDateLabel, todayStr, addDays } from '@/store/useAppStore'
 import type { Appointment, Customer, Lead, TodoItem, Performance } from '@/types'
+
+const PAYMENT_METHOD_MAP: Record<string, string> = {
+  cash: '现金',
+  wechat: '微信',
+  alipay: '支付宝',
+  card: '刷卡',
+  medical_insurance: '医保',
+  other: '其他',
+}
+
+const PAYMENT_TYPE_MAP: Record<string, string> = {
+  deposit: '定金',
+  full: '全款',
+}
 
 const COLORS = ['#6C5CE7', '#00B894', '#FDCB6E', '#FF6B6B', '#74B9FF']
 
@@ -104,14 +119,21 @@ function computeLostReasons(appointments: Appointment[]): { name: string; count:
 }
 
 export default function Profile() {
+  const navigate = useNavigate()
   const appointments = useAppStore((s) => s.appointments)
   const customers = useAppStore((s) => s.customers)
   const leads = useAppStore((s) => s.leads)
   const todos = useAppStore((s) => s.todos)
 
+  const mappedAppointments = mapMockAppointments(appointments)
+  const dealAppointments = mappedAppointments
+    .filter(a => a.result?.type === 'deal')
+    .sort((a, b) => b.date.localeCompare(a.date))
+
   const performance = computePerformance(appointments, customers, leads, todos)
   const lostReasons = computeLostReasons(appointments)
   const maxReasonCount = Math.max(...lostReasons.map(r => r.count), 1)
+  const projTotal = Object.values(performance.projectDistribution).reduce((s, n) => s + n.value, 0)
 
   return (
     <div className="min-h-screen">
@@ -158,6 +180,105 @@ export default function Profile() {
 
       <div className="px-4 -mt-2 space-y-4 pb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">快捷统计</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-primary-50 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Users size={14} className="text-primary-500" />
+                <span className="text-xs text-primary-600">转化率</span>
+              </div>
+              <div className="font-display text-xl font-bold text-primary-700">
+                {performance.weekReceptions > 0 ? Math.round((performance.weekDeals / performance.weekReceptions) * 100) : 0}%
+              </div>
+            </div>
+            <div className="bg-success-50 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarCheck size={14} className="text-success-500" />
+                <span className="text-xs text-success-600">到诊率</span>
+              </div>
+              <div className="font-display text-xl font-bold text-success-700">
+                {performance.weekAppointments > 0 ? Math.round((performance.weekDeals / performance.weekAppointments) * 100) : 0}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <DollarSign size={16} className="text-primary-500" />
+              <h3 className="text-sm font-medium text-gray-700">成交明细</h3>
+            </div>
+            <span className="text-xs text-gray-400">共 {dealAppointments.length} 笔</span>
+          </div>
+          {dealAppointments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <DollarSign size={20} className="text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-500 mb-3">暂无成交记录</p>
+              <button
+                onClick={() => navigate('/appointments')}
+                className="flex items-center gap-1 px-4 py-2 bg-primary-500 text-white text-sm rounded-full hover:bg-primary-600 transition-colors"
+              >
+                去预约台登记 <ArrowRight size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dealAppointments.map((appointment) => {
+                const result = appointment.result!
+                const firstLetter = appointment.customerName.charAt(0)
+                const dateLabel = formatDateLabel(appointment.date)
+                const paymentMethod = result.paymentMethod ? PAYMENT_METHOD_MAP[result.paymentMethod] || result.paymentMethod : ''
+                const paymentType = result.paymentType ? PAYMENT_TYPE_MAP[result.paymentType] || result.paymentType : ''
+                return (
+                  <div
+                    key={appointment.id}
+                    onClick={() => navigate(`/customer/${appointment.customerId}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-primary-50 cursor-pointer transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-purple-600 font-medium">{firstLetter}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-800 truncate">{appointment.customerName}</span>
+                        <span className="text-sm font-bold text-gray-800 truncate">{result.project || appointment.project}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-400">{dateLabel}</span>
+                        {paymentMethod && (
+                          <>
+                            <span className="text-xs text-gray-300">·</span>
+                            <span className="text-xs text-gray-400">{paymentMethod}</span>
+                          </>
+                        )}
+                        {paymentType && (
+                          <>
+                            <span className="text-xs text-gray-300">·</span>
+                            <span className="text-xs text-gray-400">{paymentType}</span>
+                          </>
+                        )}
+                      </div>
+                      {result.note && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{result.note}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-lg font-bold text-primary-600">
+                        ¥{(result.amount || 0).toLocaleString()}
+                      </span>
+                      <ChevronRight size={16} className="text-gray-300" />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 size={16} className="text-primary-500" />
             <h3 className="text-sm font-medium text-gray-700">本周趋势</h3>
@@ -203,9 +324,18 @@ export default function Profile() {
             <Award size={16} className="text-primary-500" />
             <h3 className="text-sm font-medium text-gray-700">成交项目分布</h3>
           </div>
-          {performance.projectDistribution.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-              暂无成交项目
+          {projTotal === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <DollarSign size={20} className="text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-500 mb-3">暂无成交项目</p>
+              <button
+                onClick={() => navigate('/appointments')}
+                className="flex items-center gap-1 px-4 py-2 bg-primary-500 text-white text-sm rounded-full hover:bg-primary-600 transition-colors"
+              >
+                去预约台登记 <ArrowRight size={14} />
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-4">
@@ -249,8 +379,17 @@ export default function Profile() {
             <h3 className="text-sm font-medium text-gray-700">渠道来源占比</h3>
           </div>
           {performance.sourceDistribution.length === 0 ? (
-            <div className="flex items-center justify-center h-24 text-gray-400 text-sm">
-              暂无渠道数据
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <Users size={20} className="text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-500 mb-3">暂无顾客数据</p>
+              <button
+                onClick={() => navigate('/leads')}
+                className="flex items-center gap-1 px-4 py-2 bg-primary-500 text-white text-sm rounded-full hover:bg-primary-600 transition-colors"
+              >
+                去线索池接单 <ArrowRight size={14} />
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -287,34 +426,19 @@ export default function Profile() {
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">快捷统计</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-primary-50 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Users size={14} className="text-primary-500" />
-                <span className="text-xs text-primary-600">转化率</span>
-              </div>
-              <div className="font-display text-xl font-bold text-primary-700">
-                {performance.weekReceptions > 0 ? Math.round((performance.weekDeals / performance.weekReceptions) * 100) : 0}%
-              </div>
-            </div>
-            <div className="bg-success-50 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <CalendarCheck size={14} className="text-success-500" />
-                <span className="text-xs text-success-600">到诊率</span>
-              </div>
-              <div className="font-display text-xl font-bold text-success-700">
-                {performance.weekAppointments > 0 ? Math.round((performance.weekDeals / performance.weekAppointments) * 100) : 0}%
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-sm font-medium text-gray-700 mb-3">流失原因统计</h3>
           {lostReasons.length === 0 ? (
-            <div className="flex items-center justify-center h-24 text-gray-400 text-sm">
-              暂无流失数据
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <BarChart3 size={20} className="text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-500 mb-3">暂无流失数据</p>
+              <button
+                onClick={() => navigate('/appointments')}
+                className="flex items-center gap-1 px-4 py-2 bg-primary-500 text-white text-sm rounded-full hover:bg-primary-600 transition-colors"
+              >
+                去预约台登记 <ArrowRight size={14} />
+              </button>
             </div>
           ) : (
             <div className="space-y-2">
